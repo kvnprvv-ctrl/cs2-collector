@@ -31,7 +31,7 @@ async function awardXP(env, steam64, reason, amount, matchId = 0) {
 app.all("/logs", async (req, res) => {
   try {
     const token = req.query.token;
-    //if (process.env.SHARED_TOKEN && token !== process.env.SHARED_TOKEN) {
+    if (process.env.SHARED_TOKEN && token !== process.env.SHARED_TOKEN) {
     //  return res.status(403).end("forbidden");
     }
 
