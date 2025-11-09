@@ -68,6 +68,9 @@ app.post("/register", async (req, res) => {
   const { name, ip, port, token } = req.body || {};
   if (!name || !ip || !port || !token) return res.status(400).json({ error: "missing field" });
   if (req.headers["x-auth"] !== process.env.SHARED_TOKEN) return res.status(403).end("forbidden");
+
+  const ip_port = `${ip}:${port}`;
+
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/servers`, {
     method: "POST",
     headers: {
@@ -76,11 +79,12 @@ app.post("/register", async (req, res) => {
       "Content-Type": "application/json",
       Prefer: "resolution=merge-duplicates"
     },
-    body: JSON.stringify({ name, ip, port, token })
+    body: JSON.stringify({ name, ip, port, token, ip_port })
   });
   const data = await r.json().catch(() => ({}));
   return res.status(r.ok ? 200 : 500).json(data);
 });
+
 
 
 const port = process.env.PORT || 8787;
