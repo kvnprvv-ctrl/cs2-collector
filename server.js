@@ -34,7 +34,7 @@ app.all("/logs", async (req, res) => {
   // token gate
   const token = req.query.token;
   if (process.env.SHARED_TOKEN && token !== process.env.SHARED_TOKEN) {
-    //return res.status(403).end("forbidden");
+    return res.status(403).end("forbidden");
   }
 
   // try to read a line from either raw text body or form param
