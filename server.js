@@ -5,6 +5,7 @@ import 'dotenv/config';
 const app = express();
 app.use(express.text({ type: "*/*", limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json()); // <-- add this
 
 const XP_PER_KILL = 10;
 
@@ -60,6 +61,26 @@ app.all("/logs", async (req, res) => {
 
   return res.status(200).end("ok");
 });
+
+app.post("/register", async (req, res) => {
+  const { name, ip, port, token } = req.body || {};
+  if (!name || !ip || !port || !token) return res.status(400).json({ error: "missing field" });
+  if (req.headers["x-auth"] !== process.env.SHARED_TOKEN) return res.status(403).end("forbidden");
+
+  const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/servers`, {
+    method: "POST",
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates"
+    },
+    body: JSON.stringify({ name, ip, port, token })
+  });
+  const data = await r.json().catch(() => ({}));
+  return res.status(r.ok ? 200 : 500).json(data);
+});
+
 
 const port = process.env.PORT || 8787;
 app.listen(port, () => console.log(`collector listening on ${port}`));
