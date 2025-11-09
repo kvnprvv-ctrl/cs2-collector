@@ -32,6 +32,8 @@ async function awardXP(env, steam64, reason, amount, matchId = 0) {
   }).catch(() => {});
 }
 
+const textParser = express.text({ type: "*/*", limit: "2mb" });
+
 app.all("/logs", async (req, res) => {
   const token = req.query.token;
   if (process.env.SHARED_TOKEN && token !== process.env.SHARED_TOKEN)
