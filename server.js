@@ -66,7 +66,6 @@ app.post("/register", async (req, res) => {
   const { name, ip, port, token } = req.body || {};
   if (!name || !ip || !port || !token) return res.status(400).json({ error: "missing field" });
   if (req.headers["x-auth"] !== process.env.SHARED_TOKEN) return res.status(403).end("forbidden");
-
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/servers`, {
     method: "POST",
     headers: {
