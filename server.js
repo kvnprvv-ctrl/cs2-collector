@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import express from "express";
 import fetch from "node-fetch";
-import 'dotenv/config';
 
 const app = express();
 app.use(express.text({ type: "*/*", limit: "2mb" }));
@@ -32,6 +32,26 @@ async function awardXP(env, steam64, reason, amount, matchId = 0) {
   }).catch(() => {});
 }
 
+ async function recordKill(env, { serverToken, matchId=0, killer64, victim64, assist64=null, weapon=null }) {
+  const body = JSON.stringify({
+    p_server_token: serverToken,
+    p_match_id: matchId,
+    p_killer64: killer64.toString(),
+    p_victim64: victim64.toString(),
+    p_assist64: assist64 ? assist64.toString() : null,
+    p_weapon: weapon
+  });
+  await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/record_kill`, {
+    method: "POST",
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body
+  }).catch(()=>{});
+}
+
 const textParser = express.text({ type: "*/*", limit: "2mb" });
 
 app.all("/logs", async (req, res) => {
@@ -59,13 +79,13 @@ app.all("/logs", async (req, res) => {
       await awardXP(process.env, BigInt(m[1]), "kill", XP_PER_KILL);
       continue;
     }
-  }
+}
 
   return res.status(200).end("ok");
 });
 
 app.post("/register", async (req, res) => {
-  const { name, ip, port, token } = req.body || {};
+  const { name, ip, port, token, region = "EU", mode = "retake" } = req.body || {};
   if (!name || !ip || !port || !token) return res.status(400).json({ error: "missing field" });
   if (req.headers["x-auth"] !== process.env.SHARED_TOKEN) return res.status(403).end("forbidden");
 
@@ -79,7 +99,7 @@ app.post("/register", async (req, res) => {
       "Content-Type": "application/json",
       Prefer: "resolution=merge-duplicates"
     },
-    body: JSON.stringify({ name, ip, port, token, ip_port })
+    body: JSON.stringify({ name, ip, port, token, ip_port, region, mode, active: true })
   });
   const data = await r.json().catch(() => ({}));
   return res.status(r.ok ? 200 : 500).json(data);
