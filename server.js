@@ -3,8 +3,7 @@ dotenv.config({ path: "/root/cs2-collector/.env" });
 import 'dotenv/config';
 import express from "express";
 import fetch from "node-fetch";
-import pkg from "rcon-srcds";
-const { Rcon } = pkg;
+import Rcon from "rcon-srcds";
 
 let rcon;
 async function connectRcon() {
