@@ -1,33 +1,33 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "/root/cs2-collector/.env" });
+import { Rcon } from "rcon-client";
 import express from "express";
 import fetch from "node-fetch";
 import RconClient from "rcon-srcds";
 
-let rcon;
-async function connectRcon() {
-  if (rcon && rcon.authenticated) return rcon;
+let rcon = null;
 
-  rcon = new RconClient({
-    host: process.env.RCON_HOST,
-    port: Number(process.env.RCON_PORT || 27015),
-    timeout: 5000
-  });
-  
-  await rcon.authenticate(process.env.RCON_PASSWORD);
-  return rcon;
+async function connectRcon() {
+  if (rcon && rcon.isConnected) return rcon;
+  try {
+    rcon = await Rcon.connect({
+      host: process.env.RCON_HOST,
+      port: Number(process.env.RCON_PORT || 27015),
+      password: process.env.RCON_PASSWORD,
+      timeout: 4000
+    });
+    rcon.on("end", () => { rcon = null; });
+    return rcon;
+  } catch {
+    rcon = null;
+    return null;
+  }
 }
 
 async function rconCmd(cmd) {
-  try {
-    const c = await connectRcon();
-    await c.execute(cmd);
-    return true;
-  } catch (err) {
-    console.error('RCON error:', err.message);
-    rcon = null;
-    return false;
-  }
+  const c = await connectRcon();
+  if (!c) return false;
+  try { await c.send(cmd); return true; } catch { return false; }
 }
 
 
