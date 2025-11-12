@@ -3,13 +3,13 @@ dotenv.config({ path: "/root/cs2-collector/.env" });
 import 'dotenv/config';
 import express from "express";
 import fetch from "node-fetch";
-import RconCjs from "rcon"; // commonjs default
+import { default as Rcon } from "rcon";
 
 let rcon;
 async function connectRcon() {
   if (rcon && rcon.hasAuthed) return rcon;
 
-  rcon = new RconCjs(process.env.RCON_HOST, Number(process.env.RCON_PORT || 27015), process.env.RCON_PASSWORD);
+  rcon = new Rcon(process.env.RCON_HOST, Number(process.env.RCON_PORT || 27015), process.env.RCON_PASSWORD);
   await new Promise((resolve, reject) => {
     rcon.on("auth", resolve);
     rcon.on("error", reject);
@@ -18,6 +18,13 @@ async function connectRcon() {
   return rcon;
 }
 
+/*************  ✨ Windsurf Command ⭐  *************/
+/**
+ * Send a command to the RCON server.
+ * @param {string} cmd - command to send
+ * @returns {Promise<boolean>} - true if command was sent successfully, false otherwise
+ */
+/*******  cffa6562-b5bf-4d0f-8d6f-fa678439b161  *******/
 async function rconCmd(cmd) {
   const c = await connectRcon();
   try { c.send(cmd); return true; } catch { return false; }
