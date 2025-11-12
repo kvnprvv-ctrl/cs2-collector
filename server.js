@@ -1,13 +1,5 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "/root/cs2-collector/.env" });
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-dotenv.config({ path: join(__dirname, '.env') });
-
 import express from "express";
 import fetch from "node-fetch";
 import RconClient from "rcon-srcds";
