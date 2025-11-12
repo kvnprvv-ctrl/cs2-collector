@@ -1,35 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "/root/cs2-collector/.env" });
-import { Rcon } from "rcon-client";
 import express from "express";
 import fetch from "node-fetch";
-import RconClient from "rcon-srcds";
-
-let rcon = null;
-
-async function connectRcon() {
-  if (rcon && rcon.isConnected) return rcon;
-  try {
-    rcon = await Rcon.connect({
-      host: process.env.RCON_HOST,
-      port: Number(process.env.RCON_PORT || 27015),
-      password: process.env.RCON_PASSWORD,
-      timeout: 4000
-    });
-    rcon.on("end", () => { rcon = null; });
-    return rcon;
-  } catch {
-    rcon = null;
-    return null;
-  }
-}
-
-async function rconCmd(cmd) {
-  const c = await connectRcon();
-  if (!c) return false;
-  try { await c.send(cmd); return true; } catch { return false; }
-}
-
 
 const rxConnect32 = /"[^"]+<(\d+)><STEAM_1:\d:(\d+)><[^>]*>".*connected/i;
 const rxConnectU1  = /"[^"]+<(\d+)><\[U:1:(\d+)\]><[^>]*>".*connected/i;
@@ -48,29 +20,58 @@ function steam32to64(s32) {
   return (BigInt(s32) * 2n) + 76561197960265728n;
 }
 
+function b64(s) {
+  return Buffer.from(s, "utf8").toString("base64");
+}
+
+function b64(s) { return Buffer.from(s, "utf8").toString("base64"); }
+
+async function sendConsole(line) {
+  const url = `https://dathost.net/api/0.1/game-servers/${process.env.DATHOST_SERVER_ID}/console`;
+  const headers = {
+    Authorization: `Basic ${b64(`${process.env.DATHOST_EMAIL}:${process.env.DATHOST_PASSWORD}`)}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  // If you’re acting on an invited account, uncomment next line:
+  // headers["Account-Email"] = process.env.DATHOST_ACCOUNT_EMAIL;
+
+  const r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ line }) });
+  if (!r.ok) {
+    console.error("DatHost console error", r.status, await r.text().catch(()=>"" ));
+    return false;
+  }
+  return true;
+}
+
+
+
 // simple cache: steam64 -> { allow:boolean, ts:number }
 const gateCache = new Map();
 // map steam64 -> last seen userid for kickid
 const userIdMap = new Map();
 
 async function isVerified(steam64) {
-  const now = Date.now();
-  const cached = gateCache.get(steam64);
-  if (cached && (now - cached.ts) < 5 * 60 * 1000) return cached.allow; // 5 min cache
-
-  const url = `${process.env.SUPABASE_URL}/rest/v1/users?select=verified_at,staff_override&steam64=eq.${steam64}`;
-  const r = await fetch(url, {
-    headers: {
-      apikey: process.env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
-    }
-  });
-  const rows = await r.json().catch(() => []);
-  const allow = Array.isArray(rows) && rows.length > 0 &&
-                (rows[0]?.verified_at !== null || rows[0]?.staff_override === true);
-  gateCache.set(steam64, { allow, ts: now });
-  return allow;
+  try {
+    const url = `${process.env.SUPABASE_URL}/rest/v1/users?select=verified_at,staff_override&steam64=eq.${steam64}&limit=1`;
+    const r = await fetch(url, {
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+        Accept: "application/json"
+      }
+    });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    const u = rows[0];
+    return !!(u?.staff_override === true || u?.verified_at); // verified if timestamp exists or staff override
+  } catch (e) {
+    console.error("verify lookup failed:", e);
+    // fail-open if configured
+    return process.env.FAIL_OPEN === "true";
+  }
 }
+
 
 async function recordAccess(steam64, outcome, reason) {
   const body = JSON.stringify({
@@ -94,16 +95,17 @@ function to64_fromU1(u1digits) { // Steam3 “[U:1:123456]”
 
 async function guardJoin(steam64, userid) {
   if (!steam64) return;
-  if (userid) userIdMap.set(steam64, userid);
-  const allow = await isVerified(steam64).catch(()=>false);
-  if (allow) { await recordAccess(steam64, "allow", "verified"); return; }
-
-  // not verified -> kick
-  const id = userid || userIdMap.get(steam64);
+  const allow = await isVerified(steam64); // already handles errors and FAIL_OPEN
+  if (allow) {
+    await recordAccess(steam64, "allow", "verified");
+    return;
+  }
   const reason = `Verify at ${process.env.VERIFY_URL}`;
-  const ok = id ? await rconCmd(`kickid ${id} "${reason}"`) : await rconCmd(`kick "${reason}"`);
-  await recordAccess(steam64, ok ? "deny" : "error", ok ? "not_verified" : "kick_failed");
+  const cmd = userid ? `kickid ${userid} "${reason}"` : `say "Player ${steam64} not verified"`;
+  const ok = await sendConsole(cmd);
+  await recordAccess(steam64, ok ? "deny" : "error", ok ? "not_verified" : "console_failed");
 }
+
 
 
 async function awardXP(env, steam64, reason, amount, matchId = 0) {
