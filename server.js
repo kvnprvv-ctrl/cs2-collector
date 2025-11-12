@@ -14,6 +14,10 @@ app.use(express.text({ type: "*/*", limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json()); // <-- add this
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true, t: Date.now() });
+});
+
 const XP_PER_KILL = 10;
 
 function steam32to64(s32) {
@@ -213,8 +217,6 @@ app.post("/register", async (req, res) => {
   const data = await r.json().catch(() => ({}));
   return res.status(r.ok ? 200 : 500).json(data);
 });
-
-
 
 const port = process.env.PORT || 8787;
 app.listen(port, () => console.log(`collector listening on ${port}`));
